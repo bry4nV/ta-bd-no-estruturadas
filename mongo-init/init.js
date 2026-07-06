@@ -12,12 +12,12 @@ db.createCollection("claim_attachments");
 // Indices principales.
 db.claims.createIndex({ claim_id: 1 }, { unique: true });
 db.claims.createIndex({ "customer.customer_id": 1, created_at: -1 });
-db.claims.createIndex({ current_status: 1, "details.priority": 1, created_at: -1 });
+db.claims.createIndex({ current_status: 1, priority: 1, created_at: -1 });
 db.claims.createIndex({ claim_type: 1, created_at: -1 });
 db.claims.createIndex({ "order.order_id": 1 });
 db.claims.createIndex({ "product.product_id": 1, created_at: -1 });
 db.claims.createIndex({ "seller.seller_id": 1, created_at: -1 });
-db.claims.createIndex({ "carrier.carrier_id": 1, "zone.name": 1, created_at: -1 });
+db.claims.createIndex({ "logistics.carrier.carrier_id": 1, "logistics.zone.name": 1, created_at: -1 });
 
 db.customers.createIndex({ customer_id: 1 }, { unique: true });
 db.products.createIndex({ product_id: 1 }, { unique: true });
@@ -36,16 +36,18 @@ db.claim_attachments.createIndex({ claim_id: 1, uploaded_at: -1 });
 // ---------------------------------------------------------------------------
 const now = new Date();
 const month = now.toISOString().slice(0, 7);
+const slaHours = { high: 24, medium: 72, low: 120 };
 
 function claimDoc(overrides) {
+  const priority = overrides.priority || "medium";
   const base = {
     channel: "web",
+    priority: priority,
     current_status: "created",
     created_at: now,
     updated_at: now,
-    carrier: null,
-    zone: null,
-    sla: { status: "on_track", breached: false },
+    logistics: null,
+    sla: { due_at: new Date(now.getTime() + slaHours[priority] * 3600000), breached: false },
     graph_sync_status: "pending_sync",
   };
   const doc = Object.assign(base, overrides);
@@ -73,8 +75,8 @@ const productZapatillas = { product_id: "PRD-502", name: "Zapatillas Running", c
 const sellerTech = { seller_id: "SEL-010", name: "Tech Store Peru" };
 const sellerDeportes = { seller_id: "SEL-020", name: "Deportes Lima" };
 
-const carrierRapido = { carrier_id: "CAR-001", name: "Rapido Express", zone: "Lima Norte" };
-const carrierOlva = { carrier_id: "CAR-002", name: "Olva Courier", zone: "Lima Sur" };
+const carrierRapido = { carrier_id: "CAR-001", name: "Rapido Express" };
+const carrierOlva = { carrier_id: "CAR-002", name: "Olva Courier" };
 
 const zoneNorte = { zone_id: "ZON-lima-norte", name: "Lima Norte", region: "Lima" };
 const zoneSur = { zone_id: "ZON-lima-sur", name: "Lima Sur", region: "Lima" };
@@ -84,64 +86,65 @@ const claims = [
     claim_id: "CLM-20260620-DEMOSEED01",
     claim_type: "late_delivery",
     channel: "mobile_app",
+    priority: "high",
     customer: customerJuan,
     order: { order_id: "ORD-1001", purchase_date: "2026-06-20", amount: 349.90 },
     product: productAudifonos,
     seller: sellerTech,
-    carrier: carrierRapido,
-    zone: zoneNorte,
-    details: { description: "El pedido figura como entregado, pero no fue recibido.", priority: "alta" },
+    logistics: { carrier: carrierRapido, zone: zoneNorte, promised_date: "2026-06-19", tracking_code: "TRK-10001" },
+    details: { description: "El pedido figura como entregado, pero no fue recibido." },
     evidence_summary: { count: 1, types: ["image"], last_uploaded_at: now },
   }),
   claimDoc({
     claim_id: "CLM-20260621-DEMOSEED02",
     claim_type: "defective_product",
     channel: "web",
+    priority: "medium",
     customer: customerMaria,
     order: { order_id: "ORD-1010", purchase_date: "2026-06-21", amount: 349.90 },
     product: productAudifonos,
     seller: sellerTech,
-    carrier: carrierRapido,
-    zone: zoneNorte,
-    details: { description: "El audifono izquierdo no enciende.", priority: "media" },
+    logistics: { carrier: carrierRapido, zone: zoneNorte, promised_date: "2026-06-21", tracking_code: "TRK-10002" },
+    details: { description: "El audifono izquierdo no enciende." },
     evidence_summary: { count: 1, types: ["video"], last_uploaded_at: now },
   }),
   claimDoc({
     claim_id: "CLM-20260622-DEMOSEED03",
     claim_type: "incorrect_charge",
     channel: "call_center",
+    priority: "high",
     customer: customerJuan,
     order: { order_id: "ORD-2001", purchase_date: "2026-06-22", amount: 159.90 },
     product: productZapatillas,
     seller: sellerDeportes,
-    carrier: carrierOlva,
-    zone: zoneSur,
-    details: { description: "Se cobro dos veces el mismo pedido.", priority: "alta" },
+    logistics: { carrier: carrierOlva, zone: zoneSur, promised_date: "2026-06-24", tracking_code: null },
+    details: { description: "Se cobro dos veces el mismo pedido." },
     evidence_summary: { count: 1, types: ["receipt"], last_uploaded_at: now },
   }),
   claimDoc({
     claim_id: "CLM-20260623-DEMOSEED04",
     claim_type: "return_rejected",
     channel: "whatsapp",
+    priority: "medium",
     customer: customerCarlos,
     order: { order_id: "ORD-2010", purchase_date: "2026-06-23", amount: 179.90 },
     product: productZapatillas,
     seller: sellerDeportes,
-    carrier: carrierOlva,
-    zone: zoneSur,
-    details: { description: "La devolucion fue rechazada sin justificacion clara.", priority: "media" },
+    logistics: { carrier: carrierOlva, zone: zoneSur, promised_date: "2026-06-25", tracking_code: null },
+    details: { description: "La devolucion fue rechazada sin justificacion clara." },
     evidence_summary: { count: 2, types: ["audio", "document"], last_uploaded_at: now },
   }),
   claimDoc({
     claim_id: "CLM-20260624-DEMOSEED05",
     claim_type: "customer_service",
     channel: "whatsapp",
+    priority: "low",
     customer: customerMaria,
     order: { order_id: "ORD-1020", purchase_date: "2026-06-24", amount: 349.90 },
     product: productAudifonos,
     seller: sellerTech,
-    // Sin carrier/zone: caso valido de reclamo de atencion al cliente sin logistica involucrada.
-    details: { description: "El agente no dio seguimiento al caso anterior.", priority: "baja" },
+    // Sin logistics: caso valido de reclamo de atencion al cliente sin logistica involucrada.
+    details: { description: "El agente no dio seguimiento al caso anterior." },
     evidence_summary: { count: 1, types: ["conversation"], last_uploaded_at: now },
   }),
 ];

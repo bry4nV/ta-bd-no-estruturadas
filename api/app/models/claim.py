@@ -2,7 +2,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.common import Carrier, Customer, Evidence, Order, Product, Seller, Zone
+from app.models.common import Customer, Evidence, Logistics, Order, Product, Seller
 
 
 class ClaimCreate(BaseModel):
@@ -16,12 +16,12 @@ class ClaimCreate(BaseModel):
         "customer_service",
     ]
     channel: Literal["web", "mobile_app", "store", "whatsapp", "call_center", "email"]
+    priority: Literal["low", "medium", "high"] = "medium"
     customer: Customer
     order: Order
     product: Product
     seller: Seller
-    carrier: Carrier | None = None
-    zone: Zone | None = None
+    logistics: Logistics | None = None
     details: dict[str, Any] = Field(default_factory=dict)
     evidence: list[Evidence] = Field(default_factory=list)
 
@@ -30,6 +30,7 @@ class ClaimCreate(BaseModel):
             "example": {
                 "claim_type": "defective_product",
                 "channel": "web",
+                "priority": "medium",
                 "customer": {
                     "customer_id": "CUS-001",
                     "name": "Juan Perez",
@@ -49,19 +50,14 @@ class ClaimCreate(BaseModel):
                     "seller_id": "SEL-010",
                     "name": "Tech Store Peru",
                 },
-                "carrier": {
-                    "carrier_id": "CAR-001",
-                    "name": "Rapido Express",
-                    "zone": "Lima Norte",
-                },
-                "zone": {
-                    "zone_id": "ZON-lima-norte",
-                    "name": "Lima Norte",
-                    "region": "Lima",
+                "logistics": {
+                    "carrier": {"carrier_id": "CAR-001", "name": "Rapido Express"},
+                    "zone": {"zone_id": "ZON-lima-norte", "name": "Lima Norte", "region": "Lima"},
+                    "promised_date": "2026-06-20",
+                    "tracking_code": "TRK-88991",
                 },
                 "details": {
                     "description": "El producto no enciende despues de la primera carga.",
-                    "priority": "media",
                     "expected_resolution": "Cambio o devolucion",
                 },
                 "evidence": [

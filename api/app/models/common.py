@@ -38,6 +38,13 @@ class Zone(BaseModel):
     region: str | None = Field(None, examples=["Lima"])
 
 
+class Logistics(BaseModel):
+    carrier: Carrier | None = None
+    zone: Zone | None = None
+    promised_date: str | None = Field(None, examples=["2026-06-20"])
+    tracking_code: str | None = Field(None, examples=["TRK-88991"])
+
+
 class Evidence(BaseModel):
     type: Literal["image", "video", "audio", "document", "receipt", "conversation"]
     url: str = Field(..., examples=["https://example.com/evidence/clm-0070/photo1.jpg"])

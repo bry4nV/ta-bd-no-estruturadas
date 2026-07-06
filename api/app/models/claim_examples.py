@@ -9,15 +9,19 @@ CLAIM_EXAMPLES = {
         "value": {
             "claim_type": "defective_product",
             "channel": "web",
+            "priority": "medium",
             "customer": {"customer_id": "CUS-001", "name": "Juan Perez", "email": "juan.perez@email.com"},
             "order": {"order_id": "ORD-1002", "purchase_date": "2026-06-22", "amount": 199.90},
             "product": {"product_id": "PRD-501", "name": "Audifonos Bluetooth", "category": "Tecnologia"},
             "seller": {"seller_id": "SEL-010", "name": "Tech Store Peru"},
-            "carrier": {"carrier_id": "CAR-001", "name": "Rapido Express", "zone": "Lima Norte"},
-            "zone": {"zone_id": "ZON-lima-norte", "name": "Lima Norte", "region": "Lima"},
+            "logistics": {
+                "carrier": {"carrier_id": "CAR-001", "name": "Rapido Express"},
+                "zone": {"zone_id": "ZON-lima-norte", "name": "Lima Norte", "region": "Lima"},
+                "promised_date": "2026-06-22",
+                "tracking_code": "TRK-70001",
+            },
             "details": {
                 "description": "El producto no enciende despues de la primera carga.",
-                "priority": "media",
                 "expected_resolution": "Cambio o devolucion",
             },
             "evidence": [
@@ -34,13 +38,18 @@ CLAIM_EXAMPLES = {
         "value": {
             "claim_type": "late_delivery",
             "channel": "mobile_app",
+            "priority": "high",
             "customer": {"customer_id": "CUS-001", "name": "Juan Perez", "email": "juan.perez@email.com"},
             "order": {"order_id": "ORD-1001", "purchase_date": "2026-06-20", "amount": 349.90},
             "product": {"product_id": "PRD-501", "name": "Audifonos Bluetooth", "category": "Tecnologia"},
             "seller": {"seller_id": "SEL-010", "name": "Tech Store Peru"},
-            "carrier": {"carrier_id": "CAR-001", "name": "Rapido Express", "zone": "Lima Norte"},
-            "zone": {"zone_id": "ZON-lima-norte", "name": "Lima Norte", "region": "Lima"},
-            "details": {"description": "El pedido figura como entregado, pero no fue recibido.", "priority": "alta"},
+            "logistics": {
+                "carrier": {"carrier_id": "CAR-001", "name": "Rapido Express"},
+                "zone": {"zone_id": "ZON-lima-norte", "name": "Lima Norte", "region": "Lima"},
+                "promised_date": "2026-06-19",
+                "tracking_code": "TRK-70002",
+            },
+            "details": {"description": "El pedido figura como entregado, pero no fue recibido."},
             "evidence": [
                 {
                     "type": "image",
@@ -55,13 +64,18 @@ CLAIM_EXAMPLES = {
         "value": {
             "claim_type": "incomplete_delivery",
             "channel": "store",
+            "priority": "medium",
             "customer": {"customer_id": "CUS-004", "name": "Rosa Fernandez", "email": "rosa.fernandez@email.com"},
             "order": {"order_id": "ORD-3001", "purchase_date": "2026-06-25", "amount": 89.90},
             "product": {"product_id": "PRD-503", "name": "Set de Ollas", "category": "Hogar"},
             "seller": {"seller_id": "SEL-030", "name": "Hogar Facil"},
-            "carrier": {"carrier_id": "CAR-001", "name": "Rapido Express", "zone": "Lima Norte"},
-            "zone": {"zone_id": "ZON-lima-norte", "name": "Lima Norte", "region": "Lima"},
-            "details": {"description": "Llegaron solo 3 de las 5 piezas del set.", "priority": "media"},
+            "logistics": {
+                "carrier": {"carrier_id": "CAR-001", "name": "Rapido Express"},
+                "zone": {"zone_id": "ZON-lima-norte", "name": "Lima Norte", "region": "Lima"},
+                "promised_date": "2026-06-25",
+                "tracking_code": "TRK-70003",
+            },
+            "details": {"description": "Llegaron solo 3 de las 5 piezas del set."},
             "evidence": [
                 {
                     "type": "image",
@@ -76,13 +90,18 @@ CLAIM_EXAMPLES = {
         "value": {
             "claim_type": "incorrect_charge",
             "channel": "call_center",
+            "priority": "high",
             "customer": {"customer_id": "CUS-001", "name": "Juan Perez", "email": "juan.perez@email.com"},
             "order": {"order_id": "ORD-2001", "purchase_date": "2026-06-22", "amount": 159.90},
             "product": {"product_id": "PRD-502", "name": "Zapatillas Running", "category": "Calzado"},
             "seller": {"seller_id": "SEL-020", "name": "Deportes Lima"},
-            "carrier": {"carrier_id": "CAR-002", "name": "Olva Courier", "zone": "Lima Sur"},
-            "zone": {"zone_id": "ZON-lima-sur", "name": "Lima Sur", "region": "Lima"},
-            "details": {"description": "Se cobro dos veces el mismo pedido.", "priority": "alta"},
+            "logistics": {
+                "carrier": {"carrier_id": "CAR-002", "name": "Olva Courier"},
+                "zone": {"zone_id": "ZON-lima-sur", "name": "Lima Sur", "region": "Lima"},
+                "promised_date": "2026-06-24",
+                "tracking_code": None,
+            },
+            "details": {"description": "Se cobro dos veces el mismo pedido."},
             "evidence": [
                 {
                     "type": "receipt",
@@ -97,13 +116,18 @@ CLAIM_EXAMPLES = {
         "value": {
             "claim_type": "return_rejected",
             "channel": "whatsapp",
+            "priority": "medium",
             "customer": {"customer_id": "CUS-003", "name": "Carlos Ramirez", "email": "carlos.ramirez@email.com"},
             "order": {"order_id": "ORD-2010", "purchase_date": "2026-06-23", "amount": 179.90},
             "product": {"product_id": "PRD-502", "name": "Zapatillas Running", "category": "Calzado"},
             "seller": {"seller_id": "SEL-020", "name": "Deportes Lima"},
-            "carrier": {"carrier_id": "CAR-002", "name": "Olva Courier", "zone": "Lima Sur"},
-            "zone": {"zone_id": "ZON-lima-sur", "name": "Lima Sur", "region": "Lima"},
-            "details": {"description": "La devolucion fue rechazada sin justificacion clara.", "priority": "media"},
+            "logistics": {
+                "carrier": {"carrier_id": "CAR-002", "name": "Olva Courier"},
+                "zone": {"zone_id": "ZON-lima-sur", "name": "Lima Sur", "region": "Lima"},
+                "promised_date": "2026-06-25",
+                "tracking_code": None,
+            },
+            "details": {"description": "La devolucion fue rechazada sin justificacion clara."},
             "evidence": [
                 {
                     "type": "audio",
@@ -123,13 +147,13 @@ CLAIM_EXAMPLES = {
         "value": {
             "claim_type": "warranty_not_honored",
             "channel": "email",
+            "priority": "high",
             "customer": {"customer_id": "CUS-005", "name": "Diego Torres", "email": "diego.torres@email.com"},
             "order": {"order_id": "ORD-3010", "purchase_date": "2026-05-15", "amount": 899.00},
             "product": {"product_id": "PRD-504", "name": "Licuadora Industrial", "category": "Electrodomesticos"},
             "seller": {"seller_id": "SEL-030", "name": "Hogar Facil"},
             "details": {
                 "description": "El vendedor se niega a aplicar la garantia de 1 anio.",
-                "priority": "alta",
                 "expected_resolution": "Reparacion o cambio bajo garantia",
             },
             "evidence": [
@@ -151,11 +175,12 @@ CLAIM_EXAMPLES = {
         "value": {
             "claim_type": "customer_service",
             "channel": "whatsapp",
+            "priority": "low",
             "customer": {"customer_id": "CUS-002", "name": "Maria Lopez", "email": "maria.lopez@email.com"},
             "order": {"order_id": "ORD-1020", "purchase_date": "2026-06-24", "amount": 349.90},
             "product": {"product_id": "PRD-501", "name": "Audifonos Bluetooth", "category": "Tecnologia"},
             "seller": {"seller_id": "SEL-010", "name": "Tech Store Peru"},
-            "details": {"description": "El agente no dio seguimiento al caso anterior.", "priority": "baja"},
+            "details": {"description": "El agente no dio seguimiento al caso anterior."},
             "evidence": [
                 {
                     "type": "conversation",

@@ -9,15 +9,17 @@ def sync_claim_graph(claim: dict[str, Any]) -> None:
     Proyecta en Neo4j solo las entidades necesarias para las consultas previstas.
     Order no se modela como nodo; sus datos quedan como propiedades del nodo Claim.
     """
-    zone_name = (claim.get("zone") or {}).get("name") or (claim.get("carrier") or {}).get("zone") or "Sin zona"
-    zone_id = generate_zone_id(zone_name)
-    carrier = claim.get("carrier") or {}
+    logistics = claim.get("logistics") or {}
+    carrier = logistics.get("carrier") or {}
+    zone = logistics.get("zone") or {}
+    zone_name = zone.get("name") or carrier.get("zone") or "Sin zona"
+    zone_id = zone.get("zone_id") or generate_zone_id(zone_name)
 
     params = {
         "claim_id": claim["claim_id"],
         "claim_type": claim["claim_type"],
         "current_status": claim["current_status"],
-        "priority": (claim.get("details") or {}).get("priority", "media"),
+        "priority": claim["priority"],
         "created_at": claim["created_at"].isoformat(),
         "order_id": (claim.get("order") or {}).get("order_id"),
         "purchase_date": (claim.get("order") or {}).get("purchase_date"),
@@ -31,6 +33,7 @@ def sync_claim_graph(claim: dict[str, Any]) -> None:
         "seller_name": claim["seller"].get("name"),
         "carrier_id": carrier.get("carrier_id", "SIN_CARRIER"),
         "carrier_name": carrier.get("name", "Sin operador"),
+        "tracking_code": logistics.get("tracking_code"),
         "zone_id": zone_id,
         "zone_name": zone_name,
     }
@@ -61,10 +64,13 @@ def sync_claim_graph(claim: dict[str, Any]) -> None:
     MERGE (z:Zone {zone_id: $zone_id})
     SET z.name = $zone_name
 
-    MERGE (c)-[:REGISTERED_BY]->(cu)
-    MERGE (c)-[:ABOUT_PRODUCT]->(p)
+    MERGE (c)-[rb:REGISTERED_BY]->(cu)
+    SET rb.created_at = datetime($created_at)
+    MERGE (c)-[ap:ABOUT_PRODUCT]->(p)
+    SET ap.amount = $amount
     MERGE (p)-[:SOLD_BY]->(s)
-    MERGE (c)-[:HANDLED_BY]->(ca)
+    MERGE (c)-[hb:HANDLED_BY]->(ca)
+    SET hb.tracking_code = $tracking_code
     MERGE (c)-[:OCCURS_IN_ZONE]->(z)
     """
 
@@ -113,6 +119,24 @@ RETURN other.claim_id AS claim_id,
 """
 
 
+_ENTITY_LABEL_ES = {
+    "Customer": "cliente",
+    "Product": "producto",
+    "Seller": "vendedor",
+    "Carrier": "operador logistico",
+    "Zone": "zona",
+}
+
+
+def _build_motivo(entity_types: list[str], hops: int) -> str:
+    labels = [_ENTITY_LABEL_ES.get(t, t.lower()) for t in entity_types] or ["una entidad"]
+    compartidas = " y ".join(labels)
+    if hops == 2:
+        return f"Comparte {compartidas} directamente"
+    intermedios = (hops - 2) // 2
+    return f"Conectado via {compartidas}, a traves de {intermedios} reclamo(s) intermedio(s)"
+
+
 def find_related_claims(claim_id: str, max_hops: int = 4, limit: int = 10):
     """
     Relaciones directas (hops=2, todas las entidades compartidas contadas) mas
@@ -133,7 +157,11 @@ def find_related_claims(claim_id: str, max_hops: int = 4, limit: int = 10):
                 for record in session.run(query, claim_id=claim_id, exclude_ids=direct_ids)
             ]
 
-    combined = sorted(direct + transitive, key=lambda row: (-row["score"], row["hops"]))
+    combined = direct + transitive
+    for row in combined:
+        row["motivo"] = _build_motivo(row["entity_types"], row["hops"])
+
+    combined.sort(key=lambda row: (-row["score"], row["hops"]))
     return combined[:limit]
 
 

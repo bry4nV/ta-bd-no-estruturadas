@@ -12,6 +12,7 @@ class RelatedClaim(BaseModel):
     claim_type: str | None = None
     current_status: str | None = None
     hops: int = 2
+    motivo: str = ""
     entity_types: list[str] = []
     shared_entities: list[str] = []
     score: float = 0.0

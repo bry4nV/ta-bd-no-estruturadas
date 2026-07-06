@@ -41,7 +41,7 @@ def create_claim(payload: ClaimCreate = Body(..., openapi_examples=CLAIM_EXAMPLE
 @router.get(
     "",
     summary="Buscar reclamos",
-    description="Busca reclamos en MongoDB por filtros operativos frecuentes: estado, tipo, cliente, producto o vendedor.",
+    description="Busca reclamos en MongoDB por filtros operativos frecuentes: estado, tipo, cliente, producto o vendedor. Soporta paginacion con limit/offset.",
 )
 def search_claims(
     current_status: str | None = None,
@@ -50,6 +50,7 @@ def search_claims(
     product_id: str | None = None,
     seller_id: str | None = None,
     limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0, description="Cantidad de reclamos a saltar, para paginar"),
 ):
     query = {}
     if current_status:
@@ -63,10 +64,11 @@ def search_claims(
     if seller_id:
         query["seller.seller_id"] = seller_id
 
-    docs = list(claim_repository.search_claims(query, limit))
+    docs = [claim_service.enrich_sla(doc) for doc in claim_repository.search_claims(query, limit, offset)]
     return {
         "total_coincidencias": claim_repository.count_claims(query),
         "total_mostrado": len(docs),
+        "offset": offset,
         "claims": serialize_many(docs),
     }
 
@@ -74,13 +76,13 @@ def search_claims(
 @router.get(
     "/{claim_id}",
     summary="Consultar detalle del reclamo",
-    description="Consulta el documento completo del reclamo desde MongoDB, incluyendo snapshots, resumen de evidencia, historial y SLA.",
+    description="Consulta el documento completo del reclamo desde MongoDB, incluyendo snapshots, resumen de evidencia, historial y SLA (sla.breached se recalcula en cada consulta).",
 )
 def get_claim(claim_id: str):
     claim = claim_repository.find_claim(claim_id)
     if not claim:
         raise HTTPException(status_code=404, detail="Reclamo no encontrado")
-    return serialize_document(claim)
+    return serialize_document(claim_service.enrich_sla(claim))
 
 
 @router.put(
@@ -115,8 +117,9 @@ sus datos quedan como propiedades del reclamo. El calculo es on-demand, no se pe
 Incluye relaciones **transitivas**: no solo reclamos que comparten una entidad
 directamente (`hops=2`), sino tambien reclamos conectados a traves de una cadena
 de reclamos intermedios (`hops=4, 6, ...`), hasta `max_hops`. El campo `score`
-decae con la distancia y `entity_types`/`shared_entities` muestran la cadena
-de entidades que conecta ambos reclamos.
+decae con la distancia, `motivo` da una frase legible de por que estan
+relacionados, y `entity_types`/`shared_entities` muestran la cadena de
+entidades que conecta ambos reclamos.
 """,
 )
 def get_related_claims(

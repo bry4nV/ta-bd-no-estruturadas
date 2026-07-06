@@ -59,7 +59,7 @@ Flujo de escritura (`POST /api/v1/claims`):
 |---|---|---|
 | RF01 | Registro de reclamo | `POST /api/v1/claims` |
 | RF02 | Evidencias | `claim_attachments` (metadata completa) + `evidence_summary` embebido y acotado en `claims` |
-| RF03 | Ciclo de vida | `current_status` inicial `created`; `PUT /claims/{id}/status` transiciona el estado |
+| RF03 | Ciclo de vida | `current_status` inicial `created`; `PUT /claims/{id}/status` transiciona el estado; `sla.due_at`/`breached` calculado según `priority` (ver Modelo MongoDB) |
 | RF04 | Trazabilidad | `status_history` embebido en `claims`, un evento por transición |
 | RF05 | Consulta cliente | `GET /claims/{id}` (detalle) + `GET /claims?customer_id=...` (filtrado) |
 | RF06 | Consulta operativa | `GET /claims` con filtros (`current_status`, `claim_type`, `product_id`, `seller_id`) + endpoints de `analytics` |
@@ -74,7 +74,7 @@ Flujo de escritura (`POST /api/v1/claims`):
 | RNF01 | Flexibilidad | `claims.details: {}` libre por tipo de reclamo, sin migración de esquema |
 | RNF02 | Escalabilidad | Índices compuestos en Mongo (`db/mongo.py::ensure_indexes`) y constraints/índices en Neo4j (`db/neo4j.py::create_constraints`). No se hicieron pruebas de carga/volumen real |
 | RNF03 | Disponibilidad | El registro del reclamo no depende de que Neo4j o los resúmenes estén disponibles — el outbox + worker asíncrono absorbe esas fallas y reintenta solo |
-| RNF04 | Rendimiento operativo | Lecturas de un solo documento (snapshots embebidos), sin joins |
+| RNF04 | Rendimiento operativo | Lecturas de un solo documento (snapshots embebidos), sin joins; SLA real (`due_at`) permite priorizar sin escanear todo el historial |
 | RNF05 | Rendimiento relacional | Traversal nativo en Neo4j para relacionados y recurrentes, en vez de self-joins en SQL |
 | RNF06 | Consistencia crítica | Outbox pattern con reintentos (`OUTBOX_MAX_RETRIES`) da consistencia eventual verificada. Limitación aceptada: si el proceso se cae entre procesar y marcar un evento, un contador podría reprocesarse — no se implementó idempotencia adicional (alcance académico) |
 | RNF07 | Mantenibilidad | Arquitectura por capas (`routes → services → repositories → db`), una responsabilidad por archivo |
@@ -95,6 +95,12 @@ Colecciones:
 
 IDs generados por el propio sistema (formato `PREFIJO-ULID`): `claim_id` (`CLM-YYYYMMDD-<ULID>`), `attachment_id` (`ATT-<ULID>`), `event_id` (`EVT-<ULID>`), `notification_id` (`NTF-<ULID>`), `zone_id` (`ZON-<slug>`). Los IDs de `customer`, `product`, `seller` y `carrier` los provee el sistema externo que administra esas entidades.
 
+Campos clave de `claims`:
+
+- `priority` (`low`/`medium`/`high`): campo propio del reclamo, no un dato libre dentro de `details`.
+- `logistics` (opcional, puede ser `null` para reclamos sin componente logístico como `customer_service`): agrupa `carrier`, `zone`, `promised_date` y `tracking_code` en un solo sub-documento.
+- `sla: {due_at, breached}`: `due_at` se calcula al crear el reclamo según `priority` (`high` = 24h, `medium` = 72h, `low` = 120h desde `created_at`). `breached` **no** se guarda fijo — se recalcula cada vez que se consulta el reclamo (`claim_service.enrich_sla`): compara contra la hora actual si sigue abierto, o contra `updated_at` si ya se cerró.
+
 ## Modelo Neo4j
 
 Nodos definidos según consultas previstas del grafo:
@@ -106,12 +112,12 @@ Nodos definidos según consultas previstas del grafo:
 - `Carrier`
 - `Zone`
 
-Relaciones:
+Relaciones (algunas con propiedades, solo donde hay un dato real detrás — no se inventan valores):
 
-- `(Claim)-[:REGISTERED_BY]->(Customer)`
-- `(Claim)-[:ABOUT_PRODUCT]->(Product)`
+- `(Claim)-[:REGISTERED_BY {created_at}]->(Customer)`
+- `(Claim)-[:ABOUT_PRODUCT {amount}]->(Product)`
 - `(Product)-[:SOLD_BY]->(Seller)`
-- `(Claim)-[:HANDLED_BY]->(Carrier)`
+- `(Claim)-[:HANDLED_BY {tracking_code}]->(Carrier)`
 - `(Claim)-[:OCCURS_IN_ZONE]->(Zone)`
 
 Los reclamos relacionados (por entidades compartidas) se calculan **on-demand** en la consulta de la API, no se persisten como relación en el grafo.
@@ -211,10 +217,10 @@ Si editas `neo4j-init/init.cypher` y quieres reaplicarlo **sin** borrar los vol�
 | Método y ruta | RF que cubre | Descripción |
 |---|---|---|
 | `POST /api/v1/claims` | RF01, RF02, RF03, RF04 | Registra el reclamo, guarda evidencia y dispara `ClaimCreated` |
-| `GET /api/v1/claims` | RF06 | Busca/lista con filtros (`current_status`, `claim_type`, `customer_id`, `product_id`, `seller_id`) |
-| `GET /api/v1/claims/{claim_id}` | RF04, RF05, RF06 | Detalle completo del reclamo |
+| `GET /api/v1/claims` | RF06 | Busca/lista con filtros (`current_status`, `claim_type`, `customer_id`, `product_id`, `seller_id`) y paginación (`limit`/`offset`) |
+| `GET /api/v1/claims/{claim_id}` | RF04, RF05, RF06 | Detalle completo del reclamo, con `sla.breached` recalculado en cada consulta |
 | `PUT /api/v1/claims/{claim_id}/status` | RF03, RF04 | Cambia el estado y dispara `ClaimStatusChanged` |
-| `GET /api/v1/claims/{claim_id}/related` | RF07, RF08 | Reclamos relacionados vía Neo4j, directos (`hops=2`) y transitivos (`hops=4+`, parámetro `max_hops`) |
+| `GET /api/v1/claims/{claim_id}/related` | RF07, RF08 | Reclamos relacionados vía Neo4j, directos (`hops=2`) y transitivos (`hops=4` o `6`, parámetro `max_hops`, rango 2-6, default 4), con `motivo` legible por resultado |
 
 ### Analítica (`/api/v1/analytics`) — extra, no forma parte de las 3 APIs originales pero está operativo
 

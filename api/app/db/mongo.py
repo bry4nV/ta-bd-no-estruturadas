@@ -7,7 +7,7 @@ from pymongo.database import Database
 
 from app.core.config import MONGO_DB, MONGO_URI
 
-client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000, tz_aware=True)
 
 
 def get_database() -> Database:
@@ -54,12 +54,12 @@ def ensure_indexes():
 
     db.claims.create_index("claim_id", unique=True)
     db.claims.create_index([("customer.customer_id", 1), ("created_at", -1)])
-    db.claims.create_index([("current_status", 1), ("details.priority", 1), ("created_at", -1)])
+    db.claims.create_index([("current_status", 1), ("priority", 1), ("created_at", -1)])
     db.claims.create_index([("claim_type", 1), ("created_at", -1)])
     db.claims.create_index("order.order_id")
     db.claims.create_index([("product.product_id", 1), ("created_at", -1)])
     db.claims.create_index([("seller.seller_id", 1), ("created_at", -1)])
-    db.claims.create_index([("carrier.carrier_id", 1), ("zone.name", 1), ("created_at", -1)])
+    db.claims.create_index([("logistics.carrier.carrier_id", 1), ("logistics.zone.name", 1), ("created_at", -1)])
 
     db.customers.create_index("customer_id", unique=True)
     db.products.create_index("product_id", unique=True)

@@ -8,6 +8,7 @@ Content-Type: application/json
 {
   "claim_type": "defective_product",
   "channel": "web",
+  "priority": "medium",
   "customer": {
     "customer_id": "CUS-001",
     "name": "Juan Perez",
@@ -27,19 +28,14 @@ Content-Type: application/json
     "seller_id": "SEL-010",
     "name": "Tech Store Peru"
   },
-  "carrier": {
-    "carrier_id": "CAR-001",
-    "name": "Rapido Express",
-    "zone": "Lima Norte"
-  },
-  "zone": {
-    "zone_id": "ZON-lima-norte",
-    "name": "Lima Norte",
-    "region": "Lima"
+  "logistics": {
+    "carrier": { "carrier_id": "CAR-001", "name": "Rapido Express" },
+    "zone": { "zone_id": "ZON-lima-norte", "name": "Lima Norte", "region": "Lima" },
+    "promised_date": "2026-06-22",
+    "tracking_code": "TRK-70001"
   },
   "details": {
     "description": "El producto no enciende despues de la primera carga.",
-    "priority": "media",
     "expected_resolution": "Cambio o devolucion"
   },
   "evidence": [
@@ -70,13 +66,16 @@ GET http://localhost:8000/api/v1/claims/{claim_id}/related
 ### Buscar reclamos (filtros opcionales: current_status, claim_type, customer_id, product_id, seller_id)
 GET http://localhost:8000/api/v1/claims?customer_id=CUS-001
 
+### Buscar reclamos con paginacion (segunda pagina de 2 en 2)
+GET http://localhost:8000/api/v1/claims?limit=2&offset=2
+
 ###############################################################################
 # Datos dummy de arranque (se cargan solos al hacer docker compose up):
 #   CLM-20260620-DEMOSEED01  late_delivery       evidencia: image
 #   CLM-20260621-DEMOSEED02  defective_product   evidencia: video
 #   CLM-20260622-DEMOSEED03  incorrect_charge    evidencia: receipt
 #   CLM-20260623-DEMOSEED04  return_rejected     evidencia: audio + document
-#   CLM-20260624-DEMOSEED05  customer_service    evidencia: conversation (sin carrier/zone)
+#   CLM-20260624-DEMOSEED05  customer_service    evidencia: conversation (sin logistics)
 # Cubren 5 de los 7 claim_type y los 6 tipos de evidencia. Los otros 2
 # claim_type (incomplete_delivery, warranty_not_honored) estan como ejemplos
 # de POST mas abajo para que generes tu esos reclamos cuando quieras.
@@ -112,6 +111,7 @@ Content-Type: application/json
 {
   "claim_type": "incomplete_delivery",
   "channel": "store",
+  "priority": "medium",
   "customer": {
     "customer_id": "CUS-004",
     "name": "Rosa Fernandez",
@@ -131,19 +131,14 @@ Content-Type: application/json
     "seller_id": "SEL-030",
     "name": "Hogar Facil"
   },
-  "carrier": {
-    "carrier_id": "CAR-001",
-    "name": "Rapido Express",
-    "zone": "Lima Norte"
-  },
-  "zone": {
-    "zone_id": "ZON-lima-norte",
-    "name": "Lima Norte",
-    "region": "Lima"
+  "logistics": {
+    "carrier": { "carrier_id": "CAR-001", "name": "Rapido Express" },
+    "zone": { "zone_id": "ZON-lima-norte", "name": "Lima Norte", "region": "Lima" },
+    "promised_date": "2026-06-25",
+    "tracking_code": "TRK-70003"
   },
   "details": {
-    "description": "Llegaron solo 3 de las 5 piezas del set.",
-    "priority": "media"
+    "description": "Llegaron solo 3 de las 5 piezas del set."
   },
   "evidence": [
     {
@@ -161,6 +156,7 @@ Content-Type: application/json
 {
   "claim_type": "warranty_not_honored",
   "channel": "email",
+  "priority": "high",
   "customer": {
     "customer_id": "CUS-005",
     "name": "Diego Torres",
@@ -182,7 +178,6 @@ Content-Type: application/json
   },
   "details": {
     "description": "El vendedor se niega a aplicar la garantia de 1 año.",
-    "priority": "alta",
     "expected_resolution": "Reparacion o cambio bajo garantia"
   },
   "evidence": [

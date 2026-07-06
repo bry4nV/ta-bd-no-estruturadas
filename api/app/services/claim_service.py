@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from app.core.ids import generate_claim_id, generate_zone_id
@@ -6,28 +6,48 @@ from app.db.mongo import now_utc
 from app.models.claim import ClaimCreate
 from app.repositories import attachment_repository, claim_repository, outbox_repository
 
+SLA_WINDOWS = {
+    "high": timedelta(hours=24),
+    "medium": timedelta(hours=72),
+    "low": timedelta(hours=120),
+}
 
-def _build_zone(payload: ClaimCreate) -> dict[str, Any] | None:
-    if payload.zone:
-        zone = payload.zone.model_dump()
-        if not zone.get("zone_id"):
-            zone["zone_id"] = generate_zone_id(zone["name"])
-        return zone
-    if payload.carrier and payload.carrier.zone:
-        zone_name = payload.carrier.zone
-        return {"zone_id": generate_zone_id(zone_name), "name": zone_name, "region": None}
-    return None
+
+def _build_logistics(payload: ClaimCreate) -> dict[str, Any] | None:
+    if not payload.logistics:
+        return None
+
+    logistics = payload.logistics
+    carrier = logistics.carrier.model_dump() if logistics.carrier else None
+
+    zone = logistics.zone.model_dump() if logistics.zone else None
+    if zone and not zone.get("zone_id"):
+        zone["zone_id"] = generate_zone_id(zone["name"])
+    elif not zone and carrier and logistics.carrier.zone:
+        zone_name = logistics.carrier.zone
+        zone = {"zone_id": generate_zone_id(zone_name), "name": zone_name, "region": None}
+
+    return {
+        "carrier": carrier,
+        "zone": zone,
+        "promised_date": logistics.promised_date,
+        "tracking_code": logistics.tracking_code,
+    }
+
+
+def _build_sla(priority: str, now: datetime) -> dict[str, Any]:
+    return {"due_at": now + SLA_WINDOWS[priority], "breached": False}
 
 
 def _build_claim_document(
     claim_id: str, payload: ClaimCreate, now: datetime, evidence_summary: dict[str, Any]
 ) -> dict[str, Any]:
-    priority = payload.details.get("priority", "media") if payload.details else "media"
     return {
         "_id": claim_id,
         "claim_id": claim_id,
         "claim_type": payload.claim_type,
         "channel": payload.channel,
+        "priority": payload.priority,
         "current_status": "created",
         "created_at": now,
         "updated_at": now,
@@ -35,9 +55,8 @@ def _build_claim_document(
         "order": payload.order.model_dump(),
         "product": payload.product.model_dump(),
         "seller": payload.seller.model_dump(),
-        "carrier": payload.carrier.model_dump() if payload.carrier else None,
-        "zone": _build_zone(payload),
-        "details": {**payload.details, "priority": priority},
+        "logistics": _build_logistics(payload),
+        "details": dict(payload.details),
         "evidence_summary": evidence_summary,
         "status_history": [
             {
@@ -48,9 +67,26 @@ def _build_claim_document(
                 "event_at": now,
             }
         ],
-        "sla": {"status": "on_track", "breached": False},
+        "sla": _build_sla(payload.priority, now),
         "graph_sync_status": "pending_sync",
     }
+
+
+def enrich_sla(claim: dict[str, Any]) -> dict[str, Any]:
+    """
+    Recalcula sla.breached al momento de leer el reclamo, en vez de dejarlo
+    congelado en el valor que tenia al crearse. Para reclamos abiertos se
+    compara contra el momento actual; para reclamos cerrados, contra la
+    ultima actualizacion (aproximacion razonable a cuando se resolvio).
+    """
+    sla = claim.get("sla") or {}
+    due_at = sla.get("due_at")
+    if not due_at:
+        return claim
+
+    is_closed = claim["current_status"] in ("resolved", "closed", "rejected")
+    reference_time = claim["updated_at"] if is_closed else now_utc()
+    return {**claim, "sla": {**sla, "breached": reference_time > due_at}}
 
 
 def create_claim(payload: ClaimCreate) -> dict[str, Any]:
@@ -64,6 +100,7 @@ def create_claim(payload: ClaimCreate) -> dict[str, Any]:
     claim = _build_claim_document(claim_id, payload, now, evidence_summary)
     claim_repository.insert_claim(claim)
 
+    logistics = claim.get("logistics") or {}
     outbox_repository.create_event(
         "ClaimCreated",
         claim_id,
@@ -72,8 +109,8 @@ def create_claim(payload: ClaimCreate) -> dict[str, Any]:
             "customer_id": claim["customer"]["customer_id"],
             "product_id": claim["product"]["product_id"],
             "seller_id": claim["seller"]["seller_id"],
-            "carrier_id": (claim.get("carrier") or {}).get("carrier_id"),
-            "zone_id": (claim.get("zone") or {}).get("zone_id"),
+            "carrier_id": (logistics.get("carrier") or {}).get("carrier_id"),
+            "zone_id": (logistics.get("zone") or {}).get("zone_id"),
             "claim_type": claim["claim_type"],
         },
     )
