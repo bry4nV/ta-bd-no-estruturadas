@@ -1,0 +1,29 @@
+from pydantic import BaseModel
+
+
+class ApiMessage(BaseModel):
+    claim_id: str
+    current_status: str
+    message: str
+
+
+class RelatedClaim(BaseModel):
+    claim_id: str
+    claim_type: str | None = None
+    current_status: str | None = None
+    hops: int = 2
+    entity_types: list[str] = []
+    shared_entities: list[str] = []
+    score: float = 0.0
+
+
+class RelatedClaimsResponse(BaseModel):
+    claim_id: str
+    related: list[RelatedClaim]
+
+
+class HealthResponse(BaseModel):
+    status: str
+    service: str
+    mongo: str
+    neo4j: str

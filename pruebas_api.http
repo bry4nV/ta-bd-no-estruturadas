@@ -1,0 +1,218 @@
+### Health
+GET http://localhost:8000/health
+
+### Registrar reclamo
+POST http://localhost:8000/api/v1/claims
+Content-Type: application/json
+
+{
+  "claim_type": "defective_product",
+  "channel": "web",
+  "customer": {
+    "customer_id": "CUS-001",
+    "name": "Juan Perez",
+    "email": "juan.perez@email.com"
+  },
+  "order": {
+    "order_id": "ORD-1002",
+    "purchase_date": "2026-06-22",
+    "amount": 199.90
+  },
+  "product": {
+    "product_id": "PRD-501",
+    "name": "Audifonos Bluetooth",
+    "category": "Tecnologia"
+  },
+  "seller": {
+    "seller_id": "SEL-010",
+    "name": "Tech Store Peru"
+  },
+  "carrier": {
+    "carrier_id": "CAR-001",
+    "name": "Rapido Express",
+    "zone": "Lima Norte"
+  },
+  "zone": {
+    "zone_id": "ZON-lima-norte",
+    "name": "Lima Norte",
+    "region": "Lima"
+  },
+  "details": {
+    "description": "El producto no enciende despues de la primera carga.",
+    "priority": "media",
+    "expected_resolution": "Cambio o devolucion"
+  },
+  "evidence": [
+    {
+      "type": "image",
+      "url": "https://example.com/evidence/clm-0070/photo1.jpg",
+      "description": "Foto del producto"
+    }
+  ]
+}
+
+### Consultar reclamo (reemplazar {claim_id} por el devuelto al registrar)
+GET http://localhost:8000/api/v1/claims/{claim_id}
+
+### Actualizar estado del reclamo
+PUT http://localhost:8000/api/v1/claims/{claim_id}/status
+Content-Type: application/json
+
+{
+  "current_status": "in_review",
+  "comment": "Caso derivado al area logistica",
+  "actor_id": "AGT-001"
+}
+
+### Reclamos relacionados
+GET http://localhost:8000/api/v1/claims/{claim_id}/related
+
+### Buscar reclamos (filtros opcionales: current_status, claim_type, customer_id, product_id, seller_id)
+GET http://localhost:8000/api/v1/claims?customer_id=CUS-001
+
+###############################################################################
+# Datos dummy de arranque (se cargan solos al hacer docker compose up):
+#   CLM-20260620-DEMOSEED01  late_delivery       evidencia: image
+#   CLM-20260621-DEMOSEED02  defective_product   evidencia: video
+#   CLM-20260622-DEMOSEED03  incorrect_charge    evidencia: receipt
+#   CLM-20260623-DEMOSEED04  return_rejected     evidencia: audio + document
+#   CLM-20260624-DEMOSEED05  customer_service    evidencia: conversation (sin carrier/zone)
+# Cubren 5 de los 7 claim_type y los 6 tipos de evidencia. Los otros 2
+# claim_type (incomplete_delivery, warranty_not_honored) estan como ejemplos
+# de POST mas abajo para que generes tu esos reclamos cuando quieras.
+###############################################################################
+
+### Reclamo semilla 1 (late_delivery)
+GET http://localhost:8000/api/v1/claims/CLM-20260620-DEMOSEED01
+
+### Relacionados del reclamo semilla 1 (deberia listar DEMOSEED02 con hops=2, y ahora tambien DEMOSEED04 con hops=4 -> transitivo via DEMOSEED03)
+GET http://localhost:8000/api/v1/claims/CLM-20260620-DEMOSEED01/related
+
+### Lo mismo pero solo directas (equivale al comportamiento anterior, sin transitividad)
+GET http://localhost:8000/api/v1/claims/CLM-20260620-DEMOSEED01/related?max_hops=2
+
+### Reclamo semilla 3 (incorrect_charge)
+GET http://localhost:8000/api/v1/claims/CLM-20260622-DEMOSEED03
+
+### Relacionados del reclamo semilla 3 (deberia listar DEMOSEED01 por mismo cliente, y DEMOSEED04 por producto/vendedor/operador/zona)
+GET http://localhost:8000/api/v1/claims/CLM-20260622-DEMOSEED03/related
+
+### Reclamo semilla 5 (customer_service, sin carrier/zone)
+GET http://localhost:8000/api/v1/claims/CLM-20260624-DEMOSEED05
+
+###############################################################################
+# Ejemplos adicionales para crear data dummy tu mismo desde Swagger.
+# Cubren los 2 claim_type que no vienen en el seed inicial.
+###############################################################################
+
+### Data dummy: entrega incompleta (incomplete_delivery)
+POST http://localhost:8000/api/v1/claims
+Content-Type: application/json
+
+{
+  "claim_type": "incomplete_delivery",
+  "channel": "store",
+  "customer": {
+    "customer_id": "CUS-004",
+    "name": "Rosa Fernandez",
+    "email": "rosa.fernandez@email.com"
+  },
+  "order": {
+    "order_id": "ORD-3001",
+    "purchase_date": "2026-06-25",
+    "amount": 89.90
+  },
+  "product": {
+    "product_id": "PRD-503",
+    "name": "Set de Ollas",
+    "category": "Hogar"
+  },
+  "seller": {
+    "seller_id": "SEL-030",
+    "name": "Hogar Facil"
+  },
+  "carrier": {
+    "carrier_id": "CAR-001",
+    "name": "Rapido Express",
+    "zone": "Lima Norte"
+  },
+  "zone": {
+    "zone_id": "ZON-lima-norte",
+    "name": "Lima Norte",
+    "region": "Lima"
+  },
+  "details": {
+    "description": "Llegaron solo 3 de las 5 piezas del set.",
+    "priority": "media"
+  },
+  "evidence": [
+    {
+      "type": "image",
+      "url": "https://example.com/evidence/dummy-incompleta/foto1.jpg",
+      "description": "Foto de las piezas recibidas"
+    }
+  ]
+}
+
+### Data dummy: garantia no reconocida (warranty_not_honored)
+POST http://localhost:8000/api/v1/claims
+Content-Type: application/json
+
+{
+  "claim_type": "warranty_not_honored",
+  "channel": "email",
+  "customer": {
+    "customer_id": "CUS-005",
+    "name": "Diego Torres",
+    "email": "diego.torres@email.com"
+  },
+  "order": {
+    "order_id": "ORD-3010",
+    "purchase_date": "2026-05-15",
+    "amount": 899.00
+  },
+  "product": {
+    "product_id": "PRD-504",
+    "name": "Licuadora Industrial",
+    "category": "Electrodomesticos"
+  },
+  "seller": {
+    "seller_id": "SEL-030",
+    "name": "Hogar Facil"
+  },
+  "details": {
+    "description": "El vendedor se niega a aplicar la garantia de 1 año.",
+    "priority": "alta",
+    "expected_resolution": "Reparacion o cambio bajo garantia"
+  },
+  "evidence": [
+    {
+      "type": "document",
+      "url": "https://example.com/evidence/dummy-garantia/certificado.pdf",
+      "description": "Certificado de garantia original"
+    },
+    {
+      "type": "conversation",
+      "url": "https://example.com/evidence/dummy-garantia/chat.json",
+      "description": "Conversacion donde el vendedor rechaza la garantia"
+    }
+  ]
+}
+
+### Resumen operativo
+GET http://localhost:8000/api/v1/analytics/operational-summary
+
+### Clientes con resumen documental
+GET http://localhost:8000/api/v1/analytics/customers-summary
+
+### Productos en riesgo
+GET http://localhost:8000/api/v1/analytics/products-at-risk
+
+### Vendedores en riesgo
+GET http://localhost:8000/api/v1/analytics/sellers-at-risk
+
+### Entidades recurrentes en el grafo (Neo4j)
+GET http://localhost:8000/api/v1/analytics/recurring-incidents
+
+### Eventos outbox
+GET http://localhost:8000/api/v1/analytics/outbox
