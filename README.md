@@ -58,14 +58,14 @@ Flujo de escritura (`POST /api/v1/claims`):
 | RF | Descripción | Cómo se cubre |
 |---|---|---|
 | RF01 | Registro de reclamo | `POST /api/v1/claims` |
-| RF02 | Evidencias | `claim_attachments` (metadata completa) + `evidence_summary` embebido y acotado en `claims` |
+| RF02 | Evidencias | `claim_attachments` (metadata completa, expuesta vía `GET /claims/{id}/attachments`) + `evidence_summary` embebido y acotado en `claims` |
 | RF03 | Ciclo de vida | `current_status` inicial `created`; `PUT /claims/{id}/status` transiciona el estado; `sla.due_at`/`breached` calculado según `priority` (ver Modelo MongoDB) |
 | RF04 | Trazabilidad | `status_history` embebido en `claims`, un evento por transición |
 | RF05 | Consulta cliente | `GET /claims/{id}` (detalle) + `GET /claims?customer_id=...` (filtrado) |
-| RF06 | Consulta operativa | `GET /claims` con filtros (`current_status`, `claim_type`, `product_id`, `seller_id`) + endpoints de `analytics` |
+| RF06 | Consulta operativa | `GET /claims` con filtros y paginación (`limit`/`offset`) + endpoints de `analytics` |
 | RF07 | Incidencias recurrentes | `analytics/recurring-incidents` (Neo4j) + `analytics/products-at-risk` / `sellers-at-risk` (Mongo) |
-| RF08 | Relaciones entre reclamos | `GET /claims/{id}/related` — traversal multi-hop en Neo4j, calculado on-demand (no se persiste) |
-| RF09 | Notificaciones | Colección `notifications`, generada por el worker en cada `ClaimCreated`/`ClaimStatusChanged`. El envío real (email/SMS) esta simulado — ver sección de evidencia multimedia para el mismo criterio aplicado a archivos |
+| RF08 | Relaciones entre reclamos | `GET /claims/{id}/related` — traversal directo y transitivo en Neo4j, calculado on-demand (no se persiste) |
+| RF09 | Notificaciones | Colección `notifications`, generada por el worker en cada `ClaimCreated`/`ClaimStatusChanged`. El envío real (email/SMS) está simulado |
 
 ### No funcionales
 
@@ -76,7 +76,7 @@ Flujo de escritura (`POST /api/v1/claims`):
 | RNF03 | Disponibilidad | El registro del reclamo no depende de que Neo4j o los resúmenes estén disponibles — el outbox + worker asíncrono absorbe esas fallas y reintenta solo |
 | RNF04 | Rendimiento operativo | Lecturas de un solo documento (snapshots embebidos), sin joins; SLA real (`due_at`) permite priorizar sin escanear todo el historial |
 | RNF05 | Rendimiento relacional | Traversal nativo en Neo4j para relacionados y recurrentes, en vez de self-joins en SQL |
-| RNF06 | Consistencia crítica | Outbox pattern con reintentos (`OUTBOX_MAX_RETRIES`) da consistencia eventual verificada. Limitación aceptada: si el proceso se cae entre procesar y marcar un evento, un contador podría reprocesarse — no se implementó idempotencia adicional (alcance académico) |
+| RNF06 | Consistencia crítica | Outbox pattern con reintentos da consistencia eventual verificada. Limitación aceptada: si el proceso se cae entre procesar y marcar un evento, un contador podría reprocesarse — no se implementó idempotencia adicional |
 | RNF07 | Mantenibilidad | Arquitectura por capas (`routes → services → repositories → db`), una responsabilidad por archivo |
 
 ## Modelo MongoDB
@@ -93,26 +93,19 @@ Colecciones:
 - `notifications`: auditoría de notificaciones (RF09).
 - `claim_attachments`: metadatos completos de evidencias; en `claims` solo se embebe un resumen acotado (`evidence_summary`).
 
-IDs generados por el propio sistema (formato `PREFIJO-ULID`): `claim_id` (`CLM-YYYYMMDD-<ULID>`), `attachment_id` (`ATT-<ULID>`), `event_id` (`EVT-<ULID>`), `notification_id` (`NTF-<ULID>`), `zone_id` (`ZON-<slug>`). Los IDs de `customer`, `product`, `seller` y `carrier` los provee el sistema externo que administra esas entidades.
+IDs generados por el propio sistema (formato `PREFIJO-ULID`): `claim_id` (`CLM-YYYYMMDD-<ULID>`), `attachment_id` (`ATT-<ULID>`), `event_id` (`EVT-<ULID>`), `notification_id` (`NTF-<ULID>`), `zone_id` (`ZON-<slug>`). Los IDs de `customer`, `product`, `seller` y `carrier` los provee el sistema externo que administra esas entidades. En todas las colecciones, `_id` coincide con el ID de negocio (evita un `ObjectId` extra) pero no se expone en las respuestas de la API — el cliente solo ve el campo de negocio.
 
 Campos clave de `claims`:
 
 - `priority` (`low`/`medium`/`high`): campo propio del reclamo, no un dato libre dentro de `details`.
-- `logistics` (opcional, puede ser `null` para reclamos sin componente logístico como `customer_service`): agrupa `carrier`, `zone`, `promised_date` y `tracking_code` en un solo sub-documento.
-- `sla: {due_at, breached}`: `due_at` se calcula al crear el reclamo según `priority` (`high` = 24h, `medium` = 72h, `low` = 120h desde `created_at`). `breached` **no** se guarda fijo — se recalcula cada vez que se consulta el reclamo (`claim_service.enrich_sla`): compara contra la hora actual si sigue abierto, o contra `updated_at` si ya se cerró.
+- `logistics` (opcional, `null` para reclamos sin componente logístico como `customer_service`): agrupa `carrier`, `zone`, `promised_date` y `tracking_code`.
+- `sla: {due_at, breached}`: `due_at` se calcula al crear el reclamo según `priority` (`high` = 24h, `medium` = 72h, `low` = 120h). `breached` se recalcula en cada consulta (`claim_service.enrich_sla`), no se guarda fijo.
 
 ## Modelo Neo4j
 
-Nodos definidos según consultas previstas del grafo:
+Nodos: `Claim`, `Customer`, `Product`, `Seller`, `Carrier`, `Zone`.
 
-- `Claim`
-- `Customer`
-- `Product`
-- `Seller`
-- `Carrier`
-- `Zone`
-
-Relaciones (algunas con propiedades, solo donde hay un dato real detrás — no se inventan valores):
+Relaciones (con propiedades solo donde hay un dato real detrás):
 
 - `(Claim)-[:REGISTERED_BY {created_at}]->(Customer)`
 - `(Claim)-[:ABOUT_PRODUCT {amount}]->(Product)`
@@ -120,18 +113,18 @@ Relaciones (algunas con propiedades, solo donde hay un dato real detrás — no 
 - `(Claim)-[:HANDLED_BY {tracking_code}]->(Carrier)`
 - `(Claim)-[:OCCURS_IN_ZONE]->(Zone)`
 
-Los reclamos relacionados (por entidades compartidas) se calculan **on-demand** en la consulta de la API, no se persisten como relación en el grafo.
+`GET /claims/{id}/related` busca en dos niveles, calculados on-demand (no se persisten como relación en el grafo):
 
-`GET /claims/{id}/related` busca en dos niveles:
+- **Directo** (`hops=2`): comparten al menos una entidad. Cuenta *todas* las entidades compartidas a la vez; `score = 1.00 + 0.05` por cada entidad adicional.
+- **Transitivo** (`hops=4, 6...`, hasta `max_hops`): conectados por una cadena de reclamos intermedios, sin compartir nada directo. El `score` sigue una escala por grado de cercanía (`1/grado`, siempre por debajo del directo), y en el primer nivel transitivo (`hops=4`) se afina según cuántos reclamos-puente **distintos** sostienen la conexión.
 
-- **Directo** (`hops=2`): reclamos que comparten una entidad directamente — cuenta *todas* las entidades compartidas (si comparten producto Y vendedor Y zona a la vez, las tres suman al `score`).
-- **Transitivo** (`hops=4, 6, ...`, hasta `max_hops`): reclamos conectados a través de una cadena de reclamos intermedios, aunque no compartan nada directo entre sí (ej. el Reclamo A comparte cliente con B, y B comparte vendedor con C — A y C aparecen relacionados con menor `score`). Esto es lo que realmente aprovecha un motor de grafos: en SQL/Mongo, responder "quién está conectado a quién sin saber de antemano cuántos pasos hay" exigiría consultas recursivas; en Cypher es una expresión de camino de longitud variable (`[*4..N]`) que no cambia aunque cambie la profundidad buscada.
+Esto es lo que realmente aprovecha un motor de grafos: en SQL/Mongo, "quién está conectado a quién sin saber de antemano cuántos pasos hay" exigiría consultas recursivas; en Cypher es una expresión de camino de longitud variable. Cada resultado incluye `motivo` (frase legible) y `paths` (los nodos del camino, listos para visualizar).
 
-`recurring_entities` (usada por `operational-summary`/`recurring-incidents`), en cambio, es un salto de 1 nivel — el equivalente a un `GROUP BY + COUNT`, algo que MongoDB haría igual de bien. El argumento fuerte de "por qué Neo4j" de este proyecto está en `/related`, no ahí.
+`recurring_entities` (usada por `operational-summary`/`recurring-incidents`), en cambio, es un salto de 1 nivel — el equivalente a un `GROUP BY + COUNT` que MongoDB haría igual de bien. El argumento fuerte de "por qué Neo4j" está en `/related`, no ahí.
 
 ## Configuración (variables de entorno)
 
-Definidas en `docker-compose.yml` para el servicio `api` (valores por defecto en `api/app/core/config.py` si no se especifican):
+Definidas en `docker-compose.yml` para el servicio `api` (valores por defecto en `api/app/core/config.py`):
 
 | Variable | Default | Uso |
 |---|---|---|
@@ -150,6 +143,7 @@ Solo necesitas:
 - Docker Desktop.
 - Navegador web.
 - Opcional: VS Code con extensión REST Client para ejecutar `pruebas_api.http`.
+- Opcional: Node.js si además quieres correr el frontend localmente (ver "Frontend").
 
 No necesitas instalar Python, MongoDB ni Neo4j localmente.
 
@@ -206,9 +200,9 @@ Si editas `neo4j-init/init.cypher` y quieres reaplicarlo **sin** borrar los vol�
 
 ## Datos de ejemplo para probar
 
-**Swagger** (`http://localhost:8000/docs`): `POST /api/v1/claims` trae un selector **"Examples"** con 7 payloads listos, uno por cada `claim_type`, definidos en [`api/app/models/claim_examples.py`](api/app/models/claim_examples.py) y conectados al endpoint vía `Body(openapi_examples=...)` en `routes/claims.py`. Elige uno, dale "Try it out" → "Execute" y ya está — no hace falta copiar JSON de ningún archivo aparte.
+**Swagger** (`http://localhost:8000/docs`): `POST /api/v1/claims` trae un selector **"Examples"** con 7 payloads listos, uno por cada `claim_type`, definidos en [`api/app/models/claim_examples.py`](api/app/models/claim_examples.py). Elige uno, dale "Try it out" → "Execute" y ya está.
 
-**`pruebas_api.http`** (REST Client de VS Code): cubre los 11 endpoints reales de la API — los 3 núcleo, los extras, las consultas a los 5 reclamos semilla, y los 2 `claim_type` que el seed no cubre (`incomplete_delivery`, `warranty_not_honored`).
+**`pruebas_api.http`** (REST Client de VS Code): cubre los endpoints principales de la API — los 3 núcleo, los extras, las consultas a los reclamos semilla, y los 2 `claim_type` que el seed no cubre (`incomplete_delivery`, `warranty_not_honored`).
 
 ## Referencia de endpoints
 
@@ -219,9 +213,9 @@ Si editas `neo4j-init/init.cypher` y quieres reaplicarlo **sin** borrar los vol�
 | `POST /api/v1/claims` | RF01, RF02, RF03, RF04 | Registra el reclamo, guarda evidencia y dispara `ClaimCreated` |
 | `GET /api/v1/claims` | RF06 | Busca/lista con filtros (`current_status`, `claim_type`, `customer_id`, `product_id`, `seller_id`) y paginación (`limit`/`offset`) |
 | `GET /api/v1/claims/{claim_id}` | RF04, RF05, RF06 | Detalle completo del reclamo, con `sla.breached` recalculado en cada consulta |
-| `GET /api/v1/claims/{claim_id}/attachments` | RF02 | Metadata completa de cada evidencia desde `claim_attachments` (a diferencia de `evidence_summary`, que solo trae un resumen acotado embebido en `claims`) |
+| `GET /api/v1/claims/{claim_id}/attachments` | RF02 | Metadata completa de cada evidencia desde `claim_attachments` |
 | `PUT /api/v1/claims/{claim_id}/status` | RF03, RF04 | Cambia el estado y dispara `ClaimStatusChanged` |
-| `GET /api/v1/claims/{claim_id}/related` | RF07, RF08 | Reclamos relacionados vía Neo4j, directos (`hops=2`) y transitivos (`hops=4` o `6`, parámetro `max_hops`, rango 2-6, default 4), con `motivo` legible por resultado |
+| `GET /api/v1/claims/{claim_id}/related` | RF07, RF08 | Reclamos relacionados vía Neo4j, directos y transitivos (`max_hops`, rango 2-6, default 4), con `motivo`, `score` y `paths` por resultado |
 
 ### Analítica (`/api/v1/analytics`) — extra, no forma parte de las 3 APIs originales pero está operativo
 
@@ -243,19 +237,29 @@ Si editas `neo4j-init/init.cypher` y quieres reaplicarlo **sin** borrar los vol�
 
 ## Evidencia multimedia (imagen, video, PDF, audio) — alcance actual y extensión futura
 
-`claim_attachments` guarda **metadata** de la evidencia (`type`, `url`, `description`, `uploaded_at`), no el archivo binario. Esto es intencional y es el patrón estándar tanto en NoSQL como en SQL: los binarios pesados (fotos, videos, PDFs) no se embeben en la base de datos operativa, se suben a un almacenamiento de objetos (S3, MinIO, Azure Blob) y la base de datos solo guarda la referencia.
+`claim_attachments` guarda **metadata** de la evidencia (`type`, `url`, `description`, `uploaded_at`), no el archivo binario — patrón estándar tanto en NoSQL como en SQL: los binarios pesados se suben a un almacenamiento de objetos (S3, MinIO, Azure Blob) y la base de datos solo guarda la referencia.
 
-En esta entrega, la `url` es simulada (se escribe directamente en el payload de prueba). No hay ninguna subida real de archivo que reemplazar: el contrato de la API ya está diseñado exactamente como si la integración con almacenamiento real existiera.
-
-Extensión futura con almacenamiento de objetos real (ej. MinIO, compatible con S3, corriendo como un contenedor adicional):
+En esta entrega, la `url` es simulada. El contrato de la API ya está diseñado como si la integración con almacenamiento real existiera:
 
 1. El frontend pide al backend una URL de subida (presigned URL).
 2. El backend la genera contra MinIO/S3.
-3. El frontend sube el archivo binario directamente a esa URL (sin pasar por la API).
-4. El almacenamiento de objetos devuelve la URL final real del archivo.
-5. Esa URL se guarda en `claim_attachments` — mismo campo, misma forma, sin cambios en el modelo de datos.
+3. El frontend sube el archivo binario directamente a esa URL.
+4. El almacenamiento de objetos devuelve la URL final real.
+5. Esa URL se guarda en `claim_attachments` — mismo campo, misma forma.
 
-Las URLs de ejemplo usan el dominio `example.com`, reservado oficialmente por la [RFC 2606](https://www.rfc-editor.org/rfc/rfc2606) para documentación y pruebas (garantizado por IANA para no ser nunca un dominio real registrable). No se usa `.local` porque ese TLD está reservado por la RFC 6762 para resolución de nombres en red local (mDNS) — un significado distinto al de "placeholder de ejemplo".
+Las URLs de ejemplo usan `example.com`, reservado por la [RFC 2606](https://www.rfc-editor.org/rfc/rfc2606) para documentación (no `.local`, reservado por la RFC 6762 para mDNS).
+
+## Frontend
+
+`frontend/` contiene un cliente en React + Vite + TypeScript (páginas de dashboard, listado, detalle, registro y analítica de reclamos) que consume esta API. Para correrlo:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Corre en `http://localhost:5173` (puerto ya habilitado en el CORS de la API). `frontend/.env` define `VITE_API_URL` apuntando a `http://localhost:8000`.
 
 ## Comandos útiles
 
