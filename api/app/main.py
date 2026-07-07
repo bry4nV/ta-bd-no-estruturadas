@@ -3,6 +3,7 @@ import contextlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.db.mongo import ensure_indexes, get_database, wait_for_mongo
 from app.db.neo4j import close_neo4j_driver, create_constraints, wait_for_neo4j
@@ -48,6 +49,14 @@ resumenes documentales y hacia Neo4j sin bloquear las peticiones HTTP.
         {"name": "03. Analisis", "description": "Resumen operativo, recurrencias y documentos resumen."},
     ],
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(claims.router)

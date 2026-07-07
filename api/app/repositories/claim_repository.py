@@ -16,9 +16,8 @@ def find_claim(claim_id: str) -> dict[str, Any] | None:
 
 
 def search_claims(query: dict[str, Any], limit: int, offset: int = 0):
-    # Desempate por claim_id (unico): created_at solo no basta cuando varios
-    # documentos comparten el mismo timestamp exacto, lo que rompe la
-    # paginacion (skip/limit) al no garantizar un orden estable entre paginas.
+    # claim_id como desempate: created_at solo no garantiza orden estable
+    # entre paginas cuando varios documentos comparten el mismo timestamp.
     return (
         get_collection("claims")
         .find(query)

@@ -28,3 +28,7 @@ def insert_attachments(claim_id: str, evidence: list[dict[str, Any]], uploaded_a
         "types": sorted(set(types)),
         "last_uploaded_at": uploaded_at if evidence else None,
     }
+
+
+def find_attachments(claim_id: str) -> list[dict[str, Any]]:
+    return list(get_collection("claim_attachments").find({"claim_id": claim_id}).sort("uploaded_at", 1))

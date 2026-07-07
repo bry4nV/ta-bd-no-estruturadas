@@ -41,6 +41,7 @@ MATCH (p:Product {product_id: "PRD-502"}), (s:Seller {seller_id: "SEL-020"}) MER
 // Reclamo 1: late_delivery, Juan Perez, Audifonos, Tech Store, Rapido Express, Lima Norte.
 MERGE (c1:Claim {claim_id: "CLM-20260620-DEMOSEED01"})
 SET c1.claim_type = "late_delivery", c1.current_status = "created", c1.priority = "high",
+    c1.created_at = datetime("2026-06-20T10:00:00"),
     c1.order_id = "ORD-1001", c1.purchase_date = "2026-06-20", c1.amount = 349.90;
 MATCH (c1:Claim {claim_id: "CLM-20260620-DEMOSEED01"}), (cu:Customer {customer_id: "CUS-001"})
 MERGE (c1)-[rb1:REGISTERED_BY]->(cu) SET rb1.created_at = datetime("2026-06-20T10:00:00");
@@ -53,6 +54,7 @@ MATCH (c1:Claim {claim_id: "CLM-20260620-DEMOSEED01"}), (z:Zone {zone_id: "ZON-l
 // Reclamo 2: defective_product, Maria Lopez, mismos Audifonos/Tech Store/Rapido/Lima Norte (se relaciona con el 1).
 MERGE (c2:Claim {claim_id: "CLM-20260621-DEMOSEED02"})
 SET c2.claim_type = "defective_product", c2.current_status = "created", c2.priority = "medium",
+    c2.created_at = datetime("2026-06-21T10:00:00"),
     c2.order_id = "ORD-1010", c2.purchase_date = "2026-06-21", c2.amount = 349.90;
 MATCH (c2:Claim {claim_id: "CLM-20260621-DEMOSEED02"}), (cu:Customer {customer_id: "CUS-002"})
 MERGE (c2)-[rb2:REGISTERED_BY]->(cu) SET rb2.created_at = datetime("2026-06-21T10:00:00");
@@ -65,6 +67,7 @@ MATCH (c2:Claim {claim_id: "CLM-20260621-DEMOSEED02"}), (z:Zone {zone_id: "ZON-l
 // Reclamo 3: incorrect_charge, Juan Perez (se relaciona con el 1 por cliente), Zapatillas/Deportes Lima/Olva/Lima Sur.
 MERGE (c3:Claim {claim_id: "CLM-20260622-DEMOSEED03"})
 SET c3.claim_type = "incorrect_charge", c3.current_status = "created", c3.priority = "high",
+    c3.created_at = datetime("2026-06-22T10:00:00"),
     c3.order_id = "ORD-2001", c3.purchase_date = "2026-06-22", c3.amount = 159.90;
 MATCH (c3:Claim {claim_id: "CLM-20260622-DEMOSEED03"}), (cu:Customer {customer_id: "CUS-001"})
 MERGE (c3)-[rb3:REGISTERED_BY]->(cu) SET rb3.created_at = datetime("2026-06-22T10:00:00");
@@ -77,6 +80,7 @@ MATCH (c3:Claim {claim_id: "CLM-20260622-DEMOSEED03"}), (z:Zone {zone_id: "ZON-l
 // Reclamo 4: return_rejected, Carlos Ramirez, mismos Zapatillas/Deportes Lima/Olva/Lima Sur (se relaciona con el 3).
 MERGE (c4:Claim {claim_id: "CLM-20260623-DEMOSEED04"})
 SET c4.claim_type = "return_rejected", c4.current_status = "created", c4.priority = "medium",
+    c4.created_at = datetime("2026-06-23T10:00:00"),
     c4.order_id = "ORD-2010", c4.purchase_date = "2026-06-23", c4.amount = 179.90;
 MATCH (c4:Claim {claim_id: "CLM-20260623-DEMOSEED04"}), (cu:Customer {customer_id: "CUS-003"})
 MERGE (c4)-[rb4:REGISTERED_BY]->(cu) SET rb4.created_at = datetime("2026-06-23T10:00:00");
@@ -89,6 +93,7 @@ MATCH (c4:Claim {claim_id: "CLM-20260623-DEMOSEED04"}), (z:Zone {zone_id: "ZON-l
 // Reclamo 5: customer_service, Maria Lopez, sin operador/zona asignados (caso de reclamo sin logistica).
 MERGE (c5:Claim {claim_id: "CLM-20260624-DEMOSEED05"})
 SET c5.claim_type = "customer_service", c5.current_status = "created", c5.priority = "low",
+    c5.created_at = datetime("2026-06-24T10:00:00"),
     c5.order_id = "ORD-1020", c5.purchase_date = "2026-06-24", c5.amount = 349.90;
 MATCH (c5:Claim {claim_id: "CLM-20260624-DEMOSEED05"}), (cu:Customer {customer_id: "CUS-002"})
 MERGE (c5)-[rb5:REGISTERED_BY]->(cu) SET rb5.created_at = datetime("2026-06-24T10:00:00");

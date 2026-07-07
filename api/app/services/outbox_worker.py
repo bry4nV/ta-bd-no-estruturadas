@@ -50,11 +50,8 @@ def _process_pending_batch() -> None:
 
 
 async def outbox_worker_loop() -> None:
-    """
-    Corre en background durante toda la vida del proceso FastAPI. El trabajo de
-    Mongo/Neo4j es sincrono (pymongo/neo4j-driver), por eso se delega a un hilo
-    con asyncio.to_thread para no bloquear el event loop de las peticiones HTTP.
-    """
+    # pymongo/neo4j-driver son sincronos; se delega a un hilo para no bloquear
+    # el event loop de las peticiones HTTP.
     while True:
         await asyncio.to_thread(_process_pending_batch)
         await asyncio.sleep(OUTBOX_POLL_INTERVAL_SECONDS)

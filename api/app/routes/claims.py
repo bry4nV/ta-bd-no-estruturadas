@@ -5,7 +5,7 @@ from app.db.mongo import serialize_document, serialize_many
 from app.models.claim import ClaimCreate, StatusUpdate
 from app.models.claim_examples import CLAIM_EXAMPLES
 from app.models.responses import ApiMessage, RelatedClaimsResponse
-from app.repositories import claim_repository, graph_repository
+from app.repositories import attachment_repository, claim_repository, graph_repository
 from app.services import claim_service
 
 router = APIRouter(prefix="/api/v1/claims", tags=["02. Reclamos"])
@@ -16,14 +16,9 @@ router = APIRouter(prefix="/api/v1/claims", tags=["02. Reclamos"])
     response_model=ApiMessage,
     status_code=status.HTTP_201_CREATED,
     summary="Registrar reclamo postventa",
-    description="""
-Registra un reclamo en MongoDB como documento principal, guarda la evidencia completa en
-`claim_attachments` y genera un evento `ClaimCreated` en el outbox. Un worker en background
-consume ese evento para actualizar los resumenes de cliente/producto/vendedor y proyectar
-el reclamo en Neo4j, sin bloquear la respuesta de este endpoint.
-
-MongoDB es la fuente oficial del reclamo. Neo4j es una vista derivada para analisis.
-""",
+    description="Registra el reclamo en MongoDB, guarda la evidencia en `claim_attachments` y "
+    "encola un evento `ClaimCreated` en el outbox para que un worker en background actualice "
+    "los resumenes y proyecte el reclamo en Neo4j.",
 )
 def create_claim(payload: ClaimCreate = Body(..., openapi_examples=CLAIM_EXAMPLES)):
     try:
@@ -85,6 +80,20 @@ def get_claim(claim_id: str):
     return serialize_document(claim_service.enrich_sla(claim))
 
 
+@router.get(
+    "/{claim_id}/attachments",
+    summary="Consultar evidencia completa del reclamo",
+    description="Devuelve la metadata completa de cada evidencia (`type`, `url`, `description`, "
+    "`uploaded_at`) desde `claim_attachments`, a diferencia de `evidence_summary` que va embebido "
+    "y acotado en `claims`.",
+)
+def get_claim_attachments(claim_id: str):
+    if not claim_repository.claim_exists(claim_id):
+        raise HTTPException(status_code=404, detail="Reclamo no encontrado")
+    docs = attachment_repository.find_attachments(claim_id)
+    return {"claim_id": claim_id, "attachments": serialize_many(docs)}
+
+
 @router.put(
     "/{claim_id}/status",
     response_model=ApiMessage,
@@ -109,18 +118,11 @@ def update_claim_status(claim_id: str, payload: StatusUpdate):
     "/{claim_id}/related",
     response_model=RelatedClaimsResponse,
     summary="Consultar reclamos relacionados",
-    description="""
-Consulta Neo4j para encontrar reclamos relacionados por entidades compartidas:
-cliente, producto, vendedor, operador logistico o zona. Order no se modela como nodo;
-sus datos quedan como propiedades del reclamo. El calculo es on-demand, no se persiste.
-
-Incluye relaciones **transitivas**: no solo reclamos que comparten una entidad
-directamente (`hops=2`), sino tambien reclamos conectados a traves de una cadena
-de reclamos intermedios (`hops=4, 6, ...`), hasta `max_hops`. El campo `score`
-decae con la distancia, `motivo` da una frase legible de por que estan
-relacionados, y `entity_types`/`shared_entities` muestran la cadena de
-entidades que conecta ambos reclamos.
-""",
+    description="Consulta Neo4j (on-demand, no persistido) para encontrar reclamos relacionados "
+    "por entidades compartidas: cliente, producto, vendedor, operador logistico o zona. Incluye "
+    "relaciones directas (`hops=2`) y transitivas a traves de reclamos intermedios (`hops=4, 6, ...`) "
+    "hasta `max_hops`. `score` decae con la distancia, `motivo` explica la relacion en texto, y "
+    "`entity_types`/`shared_entities` muestran la cadena de entidades que conecta ambos reclamos.",
 )
 def get_related_claims(
     claim_id: str,

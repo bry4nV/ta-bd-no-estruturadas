@@ -7,6 +7,13 @@ class ApiMessage(BaseModel):
     message: str
 
 
+class PathNode(BaseModel):
+    kind: str
+    id: str
+    label: str
+    claim_type: str | None = None
+
+
 class RelatedClaim(BaseModel):
     claim_id: str
     claim_type: str | None = None
@@ -16,6 +23,7 @@ class RelatedClaim(BaseModel):
     entity_types: list[str] = []
     shared_entities: list[str] = []
     score: float = 0.0
+    paths: list[list[PathNode]] = []
 
 
 class RelatedClaimsResponse(BaseModel):

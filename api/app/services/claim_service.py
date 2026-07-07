@@ -73,12 +73,8 @@ def _build_claim_document(
 
 
 def enrich_sla(claim: dict[str, Any]) -> dict[str, Any]:
-    """
-    Recalcula sla.breached al momento de leer el reclamo, en vez de dejarlo
-    congelado en el valor que tenia al crearse. Para reclamos abiertos se
-    compara contra el momento actual; para reclamos cerrados, contra la
-    ultima actualizacion (aproximacion razonable a cuando se resolvio).
-    """
+    # Recalcula sla.breached al leer: contra ahora si esta abierto, contra
+    # updated_at si ya esta cerrado.
     sla = claim.get("sla") or {}
     due_at = sla.get("due_at")
     if not due_at:

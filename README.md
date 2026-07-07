@@ -219,6 +219,7 @@ Si editas `neo4j-init/init.cypher` y quieres reaplicarlo **sin** borrar los vol�
 | `POST /api/v1/claims` | RF01, RF02, RF03, RF04 | Registra el reclamo, guarda evidencia y dispara `ClaimCreated` |
 | `GET /api/v1/claims` | RF06 | Busca/lista con filtros (`current_status`, `claim_type`, `customer_id`, `product_id`, `seller_id`) y paginación (`limit`/`offset`) |
 | `GET /api/v1/claims/{claim_id}` | RF04, RF05, RF06 | Detalle completo del reclamo, con `sla.breached` recalculado en cada consulta |
+| `GET /api/v1/claims/{claim_id}/attachments` | RF02 | Metadata completa de cada evidencia desde `claim_attachments` (a diferencia de `evidence_summary`, que solo trae un resumen acotado embebido en `claims`) |
 | `PUT /api/v1/claims/{claim_id}/status` | RF03, RF04 | Cambia el estado y dispara `ClaimStatusChanged` |
 | `GET /api/v1/claims/{claim_id}/related` | RF07, RF08 | Reclamos relacionados vía Neo4j, directos (`hops=2`) y transitivos (`hops=4` o `6`, parámetro `max_hops`, rango 2-6, default 4), con `motivo` legible por resultado |
 

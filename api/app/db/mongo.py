@@ -23,11 +23,12 @@ def now_utc() -> datetime:
 
 
 def serialize_document(document: dict[str, Any] | None):
+    # _id es un detalle interno de Mongo (coincide en valor con claim_id,
+    # customer_id, etc.) y no se expone en la respuesta de la API.
     if document is None:
         return None
     doc = dict(document)
-    if "_id" in doc:
-        doc["_id"] = str(doc["_id"])
+    doc.pop("_id", None)
     return doc
 
 

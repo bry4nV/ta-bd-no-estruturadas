@@ -48,7 +48,10 @@ function claimDoc(overrides) {
     updated_at: now,
     logistics: null,
     sla: { due_at: new Date(now.getTime() + slaHours[priority] * 3600000), breached: false },
-    graph_sync_status: "pending_sync",
+    // Los reclamos semilla ya tienen su proyeccion en Neo4j (cargada directo por
+    // neo4j-init/init.cypher, sin pasar por el outbox), por eso arrancan en
+    // "synced" y no en "pending_sync" como un reclamo creado por la API.
+    graph_sync_status: "synced",
   };
   const doc = Object.assign(base, overrides);
   doc._id = doc.claim_id;
@@ -162,41 +165,49 @@ const attachments = [
 
 db.claim_attachments.insertMany(attachments);
 
+// Nota: la forma de estos documentos espeja exactamente lo que producen
+// upsert_customer_summary/upsert_product_summary/upsert_seller_summary
+// (repositories/*.py) — sin campos extra que el codigo real nunca escribe
+// (ej. closed_claims o sla_breaches no se incrementan en ningun lado hoy) y
+// sin que falten los que si mantiene (created_at/updated_at).
 db.customers.insertMany([
   {
     _id: "CUS-001",
     customer_id: "CUS-001",
     name: "Juan Perez",
     email: "juan.perez@email.com",
-    claim_summary: { total_claims: 2, open_claims: 2, closed_claims: 0, last_claim_at: now },
+    created_at: now,
+    updated_at: now,
+    claim_summary: { total_claims: 2, open_claims: 2, last_claim_at: now },
     recent_claims: [
       { claim_id: "CLM-20260620-DEMOSEED01", claim_type: "late_delivery", current_status: "created", created_at: now },
       { claim_id: "CLM-20260622-DEMOSEED03", claim_type: "incorrect_charge", current_status: "created", created_at: now },
     ],
-    monthly_stats: [{ month: month, claims_created: 2, claims_closed: 0 }],
   },
   {
     _id: "CUS-002",
     customer_id: "CUS-002",
     name: "Maria Lopez",
     email: "maria.lopez@email.com",
-    claim_summary: { total_claims: 2, open_claims: 2, closed_claims: 0, last_claim_at: now },
+    created_at: now,
+    updated_at: now,
+    claim_summary: { total_claims: 2, open_claims: 2, last_claim_at: now },
     recent_claims: [
       { claim_id: "CLM-20260621-DEMOSEED02", claim_type: "defective_product", current_status: "created", created_at: now },
       { claim_id: "CLM-20260624-DEMOSEED05", claim_type: "customer_service", current_status: "created", created_at: now },
     ],
-    monthly_stats: [{ month: month, claims_created: 2, claims_closed: 0 }],
   },
   {
     _id: "CUS-003",
     customer_id: "CUS-003",
     name: "Carlos Ramirez",
     email: "carlos.ramirez@email.com",
-    claim_summary: { total_claims: 1, open_claims: 1, closed_claims: 0, last_claim_at: now },
+    created_at: now,
+    updated_at: now,
+    claim_summary: { total_claims: 1, open_claims: 1, last_claim_at: now },
     recent_claims: [
       { claim_id: "CLM-20260623-DEMOSEED04", claim_type: "return_rejected", current_status: "created", created_at: now },
     ],
-    monthly_stats: [{ month: month, claims_created: 1, claims_closed: 0 }],
   },
 ]);
 
@@ -206,6 +217,8 @@ db.products.insertMany([
     product_id: "PRD-501",
     name: "Audifonos Bluetooth",
     category: "Tecnologia",
+    created_at: now,
+    updated_at: now,
     claim_summary: { total_claims: 3, open_claims: 3, last_claim_at: now },
     monthly_stats: [{ month: month, claims_created: 3 }],
   },
@@ -214,6 +227,8 @@ db.products.insertMany([
     product_id: "PRD-502",
     name: "Zapatillas Running",
     category: "Calzado",
+    created_at: now,
+    updated_at: now,
     claim_summary: { total_claims: 2, open_claims: 2, last_claim_at: now },
     monthly_stats: [{ month: month, claims_created: 2 }],
   },
@@ -224,14 +239,18 @@ db.sellers.insertMany([
     _id: "SEL-010",
     seller_id: "SEL-010",
     name: "Tech Store Peru",
-    claim_summary: { total_claims: 3, open_claims: 3, sla_breaches: 0, last_claim_at: now },
+    created_at: now,
+    updated_at: now,
+    claim_summary: { total_claims: 3, open_claims: 3, last_claim_at: now },
     monthly_stats: [{ month: month, claims_created: 3 }],
   },
   {
     _id: "SEL-020",
     seller_id: "SEL-020",
     name: "Deportes Lima",
-    claim_summary: { total_claims: 2, open_claims: 2, sla_breaches: 0, last_claim_at: now },
+    created_at: now,
+    updated_at: now,
+    claim_summary: { total_claims: 2, open_claims: 2, last_claim_at: now },
     monthly_stats: [{ month: month, claims_created: 2 }],
   },
 ]);
